@@ -100,6 +100,9 @@ else ()
   endif ()
 endif ()
 
+if (WIN32 AND BUILD_SHARED_LIBS)
+  message(FATAL_ERROR "Shared libraries not supported on Windows.")
+endif ()
 
 project(freetype)
 
@@ -300,6 +303,13 @@ add_library(freetype
   ${PRIVATE_HEADERS}
   ${BASE_SRCS}
 )
+if (BUILD_SHARED_LIBS)
+  set_target_properties(freetype PROPERTIES
+    SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+    VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+    COMPILE_DEFINITIONS freetype_EXPORTS
+  )
+endif ()
 
 
 if (BUILD_FRAMEWORK)
@@ -339,6 +349,32 @@ if (HARFBUZZ_FOUND)
   include_directories(${HARFBUZZ_INCLUDE_DIRS})
 endif ()
 
+# Create the configure file
+if (UNIX)
+  set(enable_shared)
+  if (BUILD_SHARED_LIBS)
+    set(enable_shared "yes")
+  endif ()
+  execute_process(COMMAND mkdir -p ${PROJECT_BINARY_DIR}/builds/unix)
+  execute_process(
+    COMMAND sed -e "s?%prefix%?@CMAKE_INSTALL_PREFIX@?g"
+      -e "s?%exec_prefix%?@CMAKE_INSTALL_PREFIX@/bin?g"
+      -e "s?%exec_prefix_set%?no?g"
+      -e "s?%includedir%?@CMAKE_INSTALL_PREFIX@/include?g"
+      -e "s?%libdir%?@CMAKE_INSTALL_PREFIX@/lib?g"
+      -e "s?%build_libtool_libs%?@enable_shared@?g"
+    INPUT_FILE ${PROJECT_SOURCE_DIR}/builds/unix/freetype-config.in
+    OUTPUT_FILE ${PROJECT_BINARY_DIR}/builds/unix/freetype-config-cmake.in
+  )
+  configure_file(${PROJECT_BINARY_DIR}/builds/unix/freetype-config-cmake.in
+    builds/unix/freetype-config
+    @ONLY
+  )
+  execute_process(COMMAND chmod 775 builds/unix/freetype-config)
+  install(PROGRAMS ${PROJECT_BINARY_DIR}/builds/unix/freetype-config
+    DESTINATION bin
+  )
+endif ()
 
 # Installations
 # Note the trailing slash in the argument to the `DIRECTORY' directive
